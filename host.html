@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bible Quiz Host Screen</title>
+    <!-- Load Socket.io client -->
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        /* Light Violet Theme & Styling */
+        :root {
+            --color-bg-light: #f3f0ff; /* Very light background */
+            --color-primary: #a779e5; /* Main accent/button color */
+            --color-secondary: #c9b1f7; /* Lighter accent */
+            --color-text-dark: #3a015a; /* Dark text for contrast */
+            --color-answer-a: #b388ff; /* Brighter Blue-Violet */
+            --color-answer-b: #9c27b0; /* Deep Magenta */
+            --color-answer-c: #5d5d81; /* Dark Slate Blue */
+            --color-answer-d: #e57373; /* Light Red/Coral */
+            --color-text-light: #ffffff;
+            --color-correct: #00d28d; /* Green for correct */
+            --color-wrong: #ff4560; /* Red for wrong */
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--color-bg-light);
+            color: var(--color-text-dark);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            font-size: 1.25rem;
+        }
+
+        /* Container for the main game area */
+        #game-container {
+            width: 90%;
+            max-width: 1200px;
+            text-align: center;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: var(--color-primary);
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Main Screen Views */
+        #wait-screen, #question-screen, #results-screen, #final-screen {
+            padding: 20px;
+            background: var(--color-text-light);
+            border-radius: 10px;
+            min-height: 50vh;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--color-secondary);
+        }
+        
+        /* Question Display */
+        #question-text {
+            background-color: var(--color-primary);
+            color: var(--color-text-light);
+            padding: 30px;
+            border-radius: 10px;
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            width: 100%;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Options Grid */
+        #options-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .option-box {
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 1.2em;
+            text-align: left;
+            font-weight: bold;
+            transition: all 0.3s ease-in-out;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            color: var(--color-text-light); /* Options text is white */
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Option Colors */
+        #opt-A { background-color: var(--color-answer-a); }
+        #opt-B { background-color: var(--color-answer-b); }
+        #opt-C { background-color: var(--color-answer-c); }
+        #opt-D { background-color: var(--color-answer-d); }
+        
+        /* Result State Highlighting */
+        .option-box.correct {
+            background-color: var(--color-correct) !important;
+            border: 4px solid var(--color-text-dark);
+            transform: scale(1.05);
+        }
+
+        /* Wait Screen/Player List */
+        #player-list {
+            list-style: none;
+            padding: 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            background: var(--color-secondary);
+            padding: 15px;
+            border-radius: 10px;
+            width: 100%;
+            color: var(--color-text-dark);
+        }
+        
+        #player-list li {
+            background: var(--color-text-light);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Leaderboard */
+        #leaderboard-list {
+            list-style: none;
+            padding: 0;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        #leaderboard-list li {
+            display: flex;
+            justify-content: space-between;
+            background: var(--color-secondary);
+            color: var(--color-text-dark);
+            padding: 15px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            font-size: 1.5em;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        #leaderboard-list li:nth-child(1) { background: #ffd700; }
+        #leaderboard-list li:nth-child(2) { background: #c0c0c0; }
+        #leaderboard-list li:nth-child(3) { background: #cd7f32; }
+
+        /* Timer */
+        #timer-bar-container {
+            width: 100%;
+            height: 20px;
+            background: var(--color-secondary);
+            border-radius: 10px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.1);
+        }
+
+        #timer-bar {
+            height: 100%;
+            width: 100%;
+            background: var(--color-correct);
+            transition: width 0s linear;
+        }
+
+        /* Buttons */
+        .btn {
+            background-color: var(--color-primary);
+            color: var(--color-text-light);
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.5em;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+            margin-top: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:hover {
+            background-color: #7d3ac1; /* Slightly darker hover */
+            transform: translateY(-2px);
+        }
+
+        /* Answers Count */
+        #answers-count {
+            font-size: 1.5em;
+            margin-top: 15px;
+            padding: 10px;
+            background: var(--color-secondary);
+            color: var(--color-text-dark);
+            border-radius: 8px;
+        }
+        
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <!-- 1. Waiting Screen -->
+        <div id="wait-screen" style="display: flex;">
+            <h1>💜 Welcome to the Bible Quiz! 💜</h1>
+            <p style="font-size: 1.5em;">Players, join on your device at `http://localhost:4000/player.html`</p>
+            <h2 id="pin-display">Game PIN: <span id="game-pin">...</span></h2>
+            <p>Players Joined: <span id="player-count">0</span></p>
+
+            <ul id="player-list"></ul>
+
+            <button id="start-button" class="btn">Start Game (Need 1+ Player)</button>
+        </div>
+
+        <!-- 2. Question Screen -->
+        <div id="question-screen">
+            <div id="timer-bar-container"><div id="timer-bar"></div></div>
+            <div id="question-info">Q<span id="q-num">1</span> of <span id="q-total">30</span></div>
+            <div id="question-text">The question will appear here</div>
+            <div id="answers-count">0/0 answered</div>
+            
+            <div id="options-grid">
+                <!-- Host screen needs A, B, C, D labels -->
+                <div id="opt-A" class="option-box">A. Option 1</div>
+                <div id="opt-B" class="option-box">B. Option 2</div>
+                <div id="opt-C" class="option-box">C. Option 3</div>
+                <div id="opt-D" class="option-box">D. Option 4</div>
+            </div>
+        </div>
+
+        <!-- 3. Results Screen -->
+        <div id="results-screen">
+            <h1>Scoreboard Update</h1>
+            <p>Correct Answer Was: <span id="correct-answer-display">...</span></p>
+            <ul id="leaderboard-list"></ul>
+            <button id="next-button" class="btn">Next Question</button>
+        </div>
+
+        <!-- 4. Final Screen -->
+        <div id="final-screen">
+            <h1>🎉 Game Complete! Final Results 🎉</h1>
+            <ul id="final-leaderboard"></ul>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const pinDisplay = document.getElementById('game-pin');
+        const playerCountSpan = document.getElementById('player-count');
+        const playerList = document.getElementById('player-list');
+        const startButton = document.getElementById('start-button');
+        const nextButton = document.getElementById('next-button');
+        const timerBar = document.getElementById('timer-bar');
+
+        // Screen Containers
+        const waitScreen = document.getElementById('wait-screen');
+        const questionScreen = document.getElementById('question-screen');
+        const resultsScreen = document.getElementById('results-screen');
+        const finalScreen = document.getElementById('final-screen');
+
+        let correctAnswer;
+        let timerInterval;
+
+        // --- Screen Switching Helper ---
+        function showScreen(screen) {
+            waitScreen.style.display = 'none';
+            questionScreen.style.display = 'none';
+            resultsScreen.style.display = 'none';
+            finalScreen.style.display = 'none';
+            screen.style.display = 'flex';
+        }
+
+        // --- Event Handlers ---
+
+        socket.on('connect', () => {
+            console.log('Connected to server, initiating host mode...');
+            socket.emit('hostConnect');
+        });
+
+        socket.on('hostReady', (data) => {
+            pinDisplay.textContent = data.pin;
+            showScreen(waitScreen);
+            startButton.style.display = 'none'; // Re-hidden until players join
+        });
+
+        socket.on('playerListUpdate', (players) => {
+            playerCountSpan.textContent = players.length;
+            playerList.innerHTML = players.map(p => `<li>${p.name}</li>`).join('');
+            startButton.style.display = players.length > 0 ? 'block' : 'none';
+        });
+        
+        startButton.addEventListener('click', () => {
+            socket.emit('hostStartGame');
+        });
+
+        nextButton.addEventListener('click', () => {
+            socket.emit('hostNextQuestion');
+            nextButton.style.display = 'none';
+        });
+
+        // --- Game Flow Events ---
+
+        socket.on('questionUpdate', (data) => {
+            showScreen(questionScreen);
+            correctAnswer = data.correctAnswer;
+            
+            // Reset options style
+            document.querySelectorAll('.option-box').forEach(box => {
+                box.classList.remove('correct', 'incorrect-chosen');
+            });
+
+            document.getElementById('q-num').textContent = data.questionNumber;
+            document.getElementById('q-total').textContent = data.totalQuestions;
+            document.getElementById('question-text').textContent = data.question;
+            document.getElementById('answers-count').textContent = '0/0 answered';
+
+            // Show options including A, B, C, D labels
+            document.getElementById('opt-A').innerHTML = `A. ${data.options[0].substring(3)}`;
+            document.getElementById('opt-B').innerHTML = `B. ${data.options[1].substring(3)}`;
+            document.getElementById('opt-C').innerHTML = `C. ${data.options[2].substring(3)}`;
+            document.getElementById('opt-D').innerHTML = `D. ${data.options[3].substring(3)}`;
+
+            // Start Timer
+            clearInterval(timerInterval);
+            timerBar.style.width = '100%';
+            timerBar.style.transition = `width ${data.timeLimit / 1000}s linear`;
+            setTimeout(() => {
+                timerBar.style.width = '0%';
+            }, 50); // Small delay to kick off the animation
+        });
+
+        socket.on('answersCountUpdate', (count) => {
+             const totalPlayers = parseInt(playerCountSpan.textContent);
+             document.getElementById('answers-count').textContent = `${count}/${totalPlayers} answered`;
+        });
+        
+        socket.on('showResults', (data) => {
+            showScreen(resultsScreen);
+            clearInterval(timerInterval); // Stop any lingering timer
+            
+            document.getElementById('correct-answer-display').textContent = correctAnswer;
+            document.getElementById('answers-count').textContent = `${data.playersAnswered}/${data.totalPlayers} answered`;
+
+            // Highlight the correct answer on the hidden question screen (for reference)
+            document.getElementById(`opt-${correctAnswer}`).classList.add('correct');
+        });
+
+        socket.on('leaderboardUpdate', (data) => {
+            const list = document.getElementById('leaderboard-list');
+            list.innerHTML = data.leaderboard.map((p, index) => {
+                const rank = index + 1;
+                return `<li><span>#${rank} ${p.name}</span><span>${p.score} pts</span></li>`;
+            }).join('');
+        });
+        
+        socket.on('showNextButton', () => {
+             nextButton.style.display = 'block';
+        });
+
+        socket.on('gameOver', (data) => {
+            showScreen(final-screen);
+            const list = document.getElementById('final-leaderboard');
+            list.innerHTML = data.leaderboard.map((p, index) => {
+                const rank = index + 1;
+                return `<li><span>#${rank} ${p.name}</span><span>${p.score} pts</span></li>`;
+            }).join('');
+        });
+
+        socket.on('hostDisconnected', (message) => {
+            showScreen(waitScreen);
+            // Revert the URL displayed in the message to the current running port
+            alert(`Error: ${message}. Please refresh and reconnect to http://localhost:${PORT}/host.html`);
+            window.location.reload();
+        });
+
+    </script>
+</body>
+</html>

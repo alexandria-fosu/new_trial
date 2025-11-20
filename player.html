@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bible Quiz Player Input</title>
+    <!-- Load Socket.io client -->
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        /* Light Violet Theme & Styling */
+        :root {
+            --color-bg-light: #f3f0ff; /* Very light background */
+            --color-primary: #a779e5; /* Main accent/button color */
+            --color-secondary: #c9b1f7; /* Lighter accent */
+            --color-text-dark: #3a015a; /* Dark text for contrast */
+            
+            /* Answer Colors (Contrasting and Bright) */
+            --color-answer-a: #b388ff; /* Blue-Violet */
+            --color-answer-b: #9c27b0; /* Deep Magenta */
+            --color-answer-c: #ffb74d; /* Bright Orange */
+            --color-answer-d: #64b5f6; /* Light Blue */
+            
+            --color-text-light: #ffffff;
+            --color-correct: #00d28d;
+            --color-wrong: #ff4560;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--color-bg-light);
+            color: var(--color-text-dark);
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Input Form Screen */
+        #join-screen {
+            padding: 30px;
+            background: var(--color-text-light);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            width: 80%;
+            max-width: 400px;
+            border: 1px solid var(--color-secondary);
+        }
+
+        #join-screen h1 {
+            font-size: 1.8em;
+            color: var(--color-primary);
+        }
+
+        input[type="text"] {
+            width: 90%;
+            padding: 12px;
+            margin: 10px 0 20px 0;
+            border: 2px solid var(--color-secondary);
+            border-radius: 8px;
+            font-size: 1em;
+            background-color: var(--color-bg-light);
+            color: var(--color-text-dark);
+            text-align: center;
+        }
+
+        .btn {
+            background-color: var(--color-primary);
+            color: var(--color-text-light);
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            width: 100%;
+        }
+
+        .btn:hover {
+            background-color: #7d3ac1;
+            transform: translateY(-2px);
+        }
+        
+        /* Game Answer Screen Layout */
+        #answer-screen {
+            display: none;
+            width: 100%;
+            height: 100vh;
+            max-height: 100vh;
+            padding: 10px;
+            box-sizing: border-box;
+            /* Layout: Question above the 2x2 grid */
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Question Display Box */
+        #question-box {
+            background-color: var(--color-text-light);
+            color: var(--color-text-dark);
+            padding: 20px;
+            margin-bottom: 10px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            font-size: 1.3em;
+            font-weight: 600;
+            flex-shrink: 0; /* Prevents question from shrinking too much */
+            text-align: center;
+            max-height: 35vh; /* Limit vertical space for question */
+            overflow-y: auto;
+        }
+
+        /* Answer Buttons Grid */
+        #answer-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 5px; 
+            flex-grow: 1; /* Allows the buttons to take up remaining space */
+            min-height: 50vh;
+        }
+        
+        .answer-button {
+            width: 100%;
+            height: 100%;
+            border: none;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2) inset;
+            display: flex;
+            flex-direction: column; /* Stack letter and text */
+            align-items: flex-start;
+            justify-content: center;
+            padding: 15px;
+            color: var(--color-text-light); 
+            text-align: left;
+        }
+
+        /* Large Letter Display */
+        .option-letter {
+            font-size: 2.2rem; 
+            font-weight: 900; 
+            text-shadow: 0 3px 5px rgba(0, 0, 0, 0.3);
+            margin-bottom: 5px;
+            pointer-events: none;
+        }
+        
+        /* Option Text Display */
+        .option-text {
+            font-size: 1.1rem;
+            font-weight: 500;
+            line-height: 1.3;
+            pointer-events: none;
+            overflow: hidden;
+            max-height: 80%;
+        }
+
+
+        /* Option Colors */
+        #btn-a { 
+            background-color: var(--color-answer-a);
+            border-radius: 15px 5px 5px 5px;
+        }
+        #btn-b { 
+            background-color: var(--color-answer-b); 
+            border-radius: 5px 15px 5px 5px;
+        }
+        #btn-c { 
+            background-color: var(--color-answer-c); 
+            border-radius: 5px 5px 5px 15px;
+        }
+        #btn-d { 
+            background-color: var(--color-answer-d); 
+            border-radius: 5px 5px 15px 5px;
+        }
+
+        .answer-button:hover:not(.disabled) {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        .answer-button.disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+
+        /* Feedback Screen */
+        #feedback-screen {
+            display: none;
+            padding: 20px;
+        }
+
+        .feedback-box {
+            background: var(--color-text-light);
+            color: var(--color-text-dark);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            font-size: 1.5em;
+        }
+        
+        .feedback-correct { 
+            background-color: var(--color-correct); 
+            color: var(--color-text-light); 
+        }
+        .feedback-wrong { 
+            background-color: var(--color-wrong); 
+            color: var(--color-text-light); 
+        }
+        
+        /* Message Display */
+        #message-display, #player-status {
+            font-size: 1.2em;
+            margin-top: 20px;
+            color: var(--color-text-dark);
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <!-- 1. Join Screen -->
+        <div id="join-screen">
+            <h1>Join the Quiz</h1>
+            <input type="text" id="pin-input" placeholder="Game PIN (e.g., 1910)" value="1910" maxlength="4">
+            <input type="text" id="name-input" placeholder="Enter Your Name" maxlength="15">
+            <button class="btn" onclick="joinGame()">Join Game</button>
+            <p id="message-display"></p>
+        </div>
+
+        <!-- 2. Answer Screen - Question and Options -->
+        <div id="answer-screen">
+            <div id="question-box">
+                <!-- Question text will be inserted here -->
+                Loading question...
+            </div>
+            
+            <div id="answer-grid">
+                <button id="btn-a" class="answer-button" data-choice="A">
+                    <span class="option-letter">A</span>
+                    <span class="option-text"></span>
+                </button>
+                <button id="btn-b" class="answer-button" data-choice="B">
+                    <span class="option-letter">B</span>
+                    <span class="option-text"></span>
+                </button>
+                <button id="btn-c" class="answer-button" data-choice="C">
+                    <span class="option-letter">C</span>
+                    <span class="option-text"></span>
+                </button>
+                <button id="btn-d" class="answer-button" data-choice="D">
+                    <span class="option-letter">D</span>
+                    <span class="option-text"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 3. Feedback Screen -->
+        <div id="feedback-screen">
+            <div id="feedback-box" class="feedback-box">
+                <p id="feedback-status">Waiting for the next question...</p>
+                <p id="feedback-points" style="font-size: 0.8em; margin-top: 15px;"></p>
+                <p id="current-score" style="font-size: 0.6em; margin-top: 20px;"></p>
+            </div>
+            <p id="player-status" style="margin-top: 30px; font-size: 1.1em;"></p>
+        </div>
+
+    </div>
+
+    <script>
+        // Note: The player client assumes it is loaded from the correct port
+        const socket = io(); 
+        const joinScreen = document.getElementById('join-screen');
+        const answerScreen = document.getElementById('answer-screen');
+        const feedbackScreen = document.getElementById('feedback-screen');
+        const feedbackBox = document.getElementById('feedback-box');
+        const feedbackStatus = document.getElementById('feedback-status');
+        const feedbackPoints = document.getElementById('feedback-points');
+        const currentScore = document.getElementById('current-score');
+        const playerStatus = document.getElementById('player-status');
+        const messageDisplay = document.getElementById('message-display');
+        const questionBox = document.getElementById('question-box');
+        const answerButtons = document.querySelectorAll('.answer-button');
+
+        let playerName = '';
+        let playerScore = 0;
+
+        // Helper to get the option text span from the button
+        function getOptionTextSpan(id) {
+            return document.getElementById(id).querySelector('.option-text');
+        }
+
+        // --- Screen Switching Helper ---
+        function showScreen(screen) {
+            joinScreen.style.display = 'none';
+            answerScreen.style.display = 'none';
+            feedbackScreen.style.display = 'none';
+            
+            // Answer screen is flex column (question + grid)
+            if (screen === answerScreen) {
+                screen.style.display = 'flex'; 
+            } else {
+                screen.style.display = 'flex'; // Others are flex (column default)
+            }
+        }
+
+        // --- Join Logic ---
+        function joinGame() {
+            const pin = document.getElementById('pin-input').value.trim();
+            const name = document.getElementById('name-input').value.trim();
+
+            if (!pin || !name) {
+                messageDisplay.textContent = 'Please enter both PIN and Name.';
+                return;
+            }
+
+            playerName = name;
+            socket.emit('playerJoin', { name, pin });
+            messageDisplay.textContent = 'Attempting to join...';
+        }
+
+        socket.on('joinSuccess', (data) => {
+            playerName = data.name;
+            playerStatus.textContent = `Welcome, ${playerName}! Waiting for the game to start.`;
+            showScreen(feedbackScreen);
+            feedbackStatus.textContent = 'Game is in the waiting room.';
+            feedbackBox.classList.remove('feedback-correct', 'feedback-wrong');
+            // Ensure feedback text is dark on light background initially
+            feedbackBox.style.color = 'var(--color-text-dark)';
+            feedbackBox.style.backgroundColor = 'var(--color-text-light)';
+        });
+
+        socket.on('joinFailed', (message) => {
+            messageDisplay.textContent = `Join failed: ${message}`;
+        });
+
+        // --- Answer Handling ---
+        answerButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                if (button.classList.contains('disabled')) return;
+
+                const choice = button.getAttribute('data-choice');
+                socket.emit('playerAnswer', choice);
+                
+                // Disable all buttons immediately after answering
+                answerButtons.forEach(btn => btn.classList.add('disabled'));
+                playerStatus.textContent = `Answer locked in. Waiting for others...`;
+                
+                // Visually confirm the choice
+                button.style.transform = 'scale(0.95)';
+            });
+        });
+
+        // --- Game Flow Events ---
+
+        socket.on('playerQuestionPrompt', (data) => {
+            showScreen(answerScreen);
+            
+            // Set the full question text
+            questionBox.textContent = data.question; 
+            playerStatus.textContent = `Q${data.questionNumber}: Answer fast!`;
+            
+            // Set the option text
+            const optionTexts = data.options;
+            getOptionTextSpan('btn-a').textContent = optionTexts[0];
+            getOptionTextSpan('btn-b').textContent = optionTexts[1];
+            getOptionTextSpan('btn-c').textContent = optionTexts[2];
+            getOptionTextSpan('btn-d').textContent = optionTexts[3];
+            
+            // Re-enable and reset buttons
+            answerButtons.forEach(btn => {
+                btn.classList.remove('disabled');
+                btn.style.transform = 'scale(1)';
+            });
+        });
+
+        socket.on('answerFeedback', (data) => {
+            showScreen(feedbackScreen);
+            feedbackBox.classList.remove('feedback-correct', 'feedback-wrong');
+            
+            if (data.correct) {
+                feedbackBox.classList.add('feedback-correct');
+                feedbackStatus.textContent = '🎉 CORRECT! 🎉';
+                feedbackPoints.textContent = `+${data.points} Points`;
+                feedbackBox.style.color = 'var(--color-text-light)';
+            } else {
+                feedbackBox.classList.add('feedback-wrong');
+                feedbackStatus.textContent = '❌ INCORRECT ❌';
+                feedbackPoints.textContent = `+0 Points`;
+                feedbackBox.style.color = 'var(--color-text-light)';
+            }
+            currentScore.textContent = `Your total score: ${playerScore}`;
+            playerStatus.textContent = `Waiting for the host to continue...`;
+        });
+        
+        socket.on('leaderboardUpdate', (data) => {
+            // Update score privately if the player is on the leaderboard
+            const self = data.leaderboard.find(p => p.name === playerName);
+            if (self) {
+                 playerScore = self.score;
+                 currentScore.textContent = `Your total score: ${playerScore}`;
+            }
+            
+            // If we are showing scores, keep showing the feedback screen until next question
+            if (data.state === 'score') {
+                showScreen(feedbackScreen);
+                feedbackStatus.textContent = 'Scoreboard is displayed on the main screen.';
+                feedbackPoints.textContent = '';
+                // Revert to non-highlighted state
+                feedbackBox.classList.remove('feedback-correct', 'feedback-wrong');
+                feedbackBox.style.color = 'var(--color-text-dark)';
+                feedbackBox.style.backgroundColor = 'var(--color-text-light)';
+            }
+        });
+
+        socket.on('gameOver', (data) => {
+            showScreen(feedbackScreen);
+            feedbackBox.classList.remove('feedback-correct', 'feedback-wrong');
+            feedbackBox.style.backgroundColor = 'var(--color-secondary)';
+            feedbackBox.style.color = 'var(--color-text-dark)';
+            
+            // Find final rank
+            const rank = data.leaderboard.findIndex(p => p.name === playerName) + 1;
+
+            feedbackStatus.textContent = `Game Over! You finished in #${rank} place!`;
+            feedbackPoints.textContent = `Final Score: ${playerScore} pts`;
+            playerStatus.textContent = 'Thank you for playing!';
+        });
+
+        socket.on('hostDisconnected', (message) => {
+            // Use a simple message box since alert() is forbidden
+            const messageBox = document.createElement('div');
+            messageBox.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 10px; border: 2px solid red; z-index: 1000; box-shadow: 0 0 20px rgba(0,0,0,0.5);';
+            messageBox.innerHTML = `<h3>Error</h3><p>${message}</p><button onclick="window.location.reload()">Reload</button>`;
+            document.body.appendChild(messageBox);
+        });
+
+    </script>
+</body>
+</html>
